@@ -1,0 +1,29 @@
+
+{
+  "name": "a-share-dual-momentum-backtester",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "homepage": ".",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d dist"
+  },
+  "dependencies": {
+    "@google/genai": "^1.37.0",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "recharts": "^3.6.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.3",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^4.3.4",
+    "gh-pages": "^6.3.0",
+    "typescript": "~5.6.2",
+    "vite": "^6.0.5"
+  }
+}

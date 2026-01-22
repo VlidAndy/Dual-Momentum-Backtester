@@ -1,0 +1,5 @@
+{
+  "name": "A-Share Dual Momentum Backtester",
+  "description": "A professional-grade backtesting tool for the A-share market focusing on CSI 1000 and Dividend Low Volatility funds using a dual momentum rotation strategy.",
+  "requestFramePermissions": []
+}
