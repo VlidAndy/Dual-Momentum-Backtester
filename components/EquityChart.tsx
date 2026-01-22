@@ -50,9 +50,10 @@ const EquityChart: React.FC<Props> = ({ data, name1, name2 }) => {
             domain={['auto', 'auto']}
           />
           <Tooltip 
-            formatter={(value: any) => {
-              const numValue = typeof value === 'number' ? value : parseFloat(value);
-              return [!isNaN(numValue) ? `¥${numValue.toFixed(2)}` : '¥0.00', ''];
+            formatter={(value: any, name: any) => {
+              const numValue = Number(value);
+              const displayValue = !isNaN(numValue) ? `¥${numValue.toFixed(2)}` : '¥0.00';
+              return [displayValue, name];
             }}
             contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '12px' }}
           />
@@ -88,7 +89,7 @@ const EquityChart: React.FC<Props> = ({ data, name1, name2 }) => {
             isAnimationActive={false}
           />
           <Line 
-            name={`标电A: ${name1}`} 
+            name={`标的A: ${name1}`} 
             type="monotone" 
             dataKey="benchmark1" 
             stroke="#ef4444" 

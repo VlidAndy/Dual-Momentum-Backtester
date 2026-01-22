@@ -10,6 +10,6 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false,
-    minify: 'terser',
+    // 移除显式的 terser 配置，Vite 默认使用内置的 esbuild，速度更快且无需额外安装依赖
   }
 });
