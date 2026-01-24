@@ -9,6 +9,13 @@ import RealWorldView from './components/RealWorldView';
 
 type ViewMode = 'BACKTEST' | 'REAL_WORLD';
 
+// 辅助函数：获取本地日期字符串 (YYYY-MM-DD)
+const getLocalDateString = (date: Date = new Date()) => {
+  const offset = date.getTimezoneOffset();
+  const adjustedDate = new Date(date.getTime() - (offset * 60 * 1000));
+  return adjustedDate.toISOString().split('T')[0];
+};
+
 const App: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('BACKTEST');
   
@@ -22,10 +29,14 @@ const App: React.FC = () => {
   const [minHoldDays, setMinHoldDays] = useState<number>(7);
   const [isParamLocked, setIsParamLocked] = useState<boolean>(false);
   const [principal, setPrincipal] = useState<number>(10000);
+  
   const [startDate, setStartDate] = useState(() => {
-    const d = new Date(); d.setFullYear(d.getFullYear() - 1); return d.toISOString().split('T')[0];
+    const d = new Date(); 
+    d.setFullYear(d.getFullYear() - 1); 
+    return getLocalDateString(d);
   });
-  const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
+  
+  const [endDate, setEndDate] = useState(() => getLocalDateString());
   const [injections, setInjections] = useState<CapitalInjection[]>([]);
 
   // --- 数据持久化与交互 ---
@@ -40,6 +51,7 @@ const App: React.FC = () => {
   const portfolio = usePortfolio(realOps, fundA, fundB, rawFundData);
   const result = useMemo(() => {
     if (rawFundData.length < 2) return null;
+    // 修复：确保过滤条件包含边界，且不因为时区 Bug 错误截断
     const filtered = rawFundData.filter(d => d.date >= startDate && d.date <= endDate);
     if (filtered.length < 2) return null;
     return runBacktest(filtered, fundA.code, fundB.code, momentumN, 0, false, useMAFilter, principal, minHoldDays, injections);
@@ -64,7 +76,7 @@ const App: React.FC = () => {
         </div>
         <div className="hidden md:flex items-center gap-3 pr-4">
            {loading && <span className="text-[10px] font-black text-indigo-500 animate-pulse uppercase">同步中...</span>}
-           <span className="text-[10px] font-black text-slate-300 uppercase tracking-tighter">PRO_V14_MOBILE_FIX</span>
+           <span className="text-[10px] font-black text-slate-300 uppercase tracking-tighter">PRO_V15_TZ_FIX</span>
         </div>
       </nav>
 
@@ -92,7 +104,6 @@ const App: React.FC = () => {
         )}
       </main>
       
-      {/* 移动端页脚提示 */}
       <footer className="mt-12 md:hidden text-center pb-8 border-t pt-6 border-slate-100">
         <p className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">A-Share Dual Momentum Pro</p>
       </footer>

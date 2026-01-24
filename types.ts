@@ -39,6 +39,12 @@ export interface BacktestResult {
     passMA1: boolean;
     passMA2: boolean;
     recommendation: string;
+    // 新增元数据
+    meta?: {
+      lastDate1: string;
+      lastDate2: string;
+      isSynced: boolean;
+    };
   };
 }
 
@@ -65,7 +71,7 @@ export interface Trade {
 
 export interface BacktestMetrics {
   initialCapital: number;
-  totalInvested: number; // 新增：总投入
+  totalInvested: number; 
   finalCapital: number;
   totalReturn: number;
   maxDrawdown: number;

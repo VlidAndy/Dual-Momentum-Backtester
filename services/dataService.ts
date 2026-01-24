@@ -1,3 +1,4 @@
+
 import { FundData } from "../types";
 
 export interface SearchResult {
@@ -6,10 +7,6 @@ export interface SearchResult {
   type: string;
 }
 
-/**
- * 搜索基金代码或名称
- * Fix: Added missing searchFunds export to resolve the compilation error in App.tsx
- */
 export const searchFunds = async (key: string): Promise<SearchResult[]> => {
   if (!key) return [];
   try {
@@ -32,9 +29,6 @@ export const searchFunds = async (key: string): Promise<SearchResult[]> => {
   }
 };
 
-/**
- * 强化版 JSON 清洗工具
- */
 const cleanAndParseJSON = (jsonLikeStr: string): any[] => {
   if (!jsonLikeStr) return [];
   let cleaned = jsonLikeStr.trim();
@@ -49,13 +43,9 @@ const cleanAndParseJSON = (jsonLikeStr: string): any[] => {
   }
 };
 
-/**
- * 核心提取函数：加入时间戳参数强制刷新缓存
- */
 const fetchRawFundData = async (code: string): Promise<{ timestamp: number; nav: number }[]> => {
   if (!code) return [];
   try {
-    // 加入 v 参数强制绕过缓存
     const cacheBuster = `v=${Date.now()}`;
     const targetUrl = `https://fund.eastmoney.com/pingzhongdata/${code}.js?${cacheBuster}`;
     const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
@@ -66,6 +56,7 @@ const fetchRawFundData = async (code: string): Promise<{ timestamp: number; nav:
     const text = await response.text();
     if (!text || text.length < 200) throw new Error(`Invalid response for ${code}`);
 
+    // EastMoney JS 变量名列表
     const varNames = ['Data_ACWorthTrend', 'Data_netWorthTrend', 'Data_grandTotalWorthTrend'];
     let rawData: any[] = [];
 
@@ -102,7 +93,11 @@ const fetchRawFundData = async (code: string): Promise<{ timestamp: number; nav:
 
 const formatDate = (timestamp: number): string => {
   const date = new Date(timestamp);
-  return date.toISOString().split('T')[0];
+  // 使用本地日期格式 YYYY-MM-DD
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 };
 
 export const fetchHistoricalData = async (code1: string, code2: string): Promise<FundData[]> => {

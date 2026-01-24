@@ -1,9 +1,6 @@
 
 import { FundData, BacktestResult, EquityPoint, Trade, CapitalInjection } from "../types";
 
-/**
- * 专业级基金回测 engine v6.0 - 修正追加资金对标逻辑与回撤时间
- */
 export const runBacktest = (
   data: FundData[], 
   code1: string, 
@@ -26,7 +23,6 @@ export const runBacktest = (
   let totalCosts = 0;
   let lastTradeIdx = -1; 
   
-  // 核心修正：基准也需要按份额计算，以应对中途加仓
   let bench1Shares = initialCapital / data[0].nav1;
   let bench2Shares = initialCapital / data[0].nav2;
   let benchMarketShares = initialCapital / data[0].navBenchmark;
@@ -63,12 +59,9 @@ export const runBacktest = (
   for (let i = 0; i < data.length; i++) {
     const today = data[i];
 
-    // 1. 处理资金追加 (Injection) - 策略与所有基准同步加仓
     const todaysInjections = injections.filter(inj => inj.date === today.date);
     for (const inj of todaysInjections) {
       totalInvested += inj.amount;
-      
-      // 策略加仓
       if (currentHolding === 'CASH') {
         currentCapital += inj.amount;
       } else {
@@ -88,15 +81,12 @@ export const runBacktest = (
           reason: '中途追加投入资金'
         });
       }
-
-      // 基准加仓（对比必须公平，基准也要买入相同金额）
       bench1Shares += inj.amount / today.nav1;
       bench2Shares += inj.amount / today.nav2;
       benchMarketShares += inj.amount / today.navBenchmark;
       cashValue += inj.amount;
     }
     
-    // 2. 更新每日资产价值
     if (currentHolding === 'CASH') {
       currentCapital *= (1 + dailyCashRate);
     } else {
@@ -116,7 +106,6 @@ export const runBacktest = (
       holding: currentHolding
     });
 
-    // 3. 处理挂起的调仓买入
     if (pendingSwitchTo) {
       const buyPrice = pendingSwitchTo === code1 ? today.nav1 : today.nav2;
       const totalAmount = currentCapital;
@@ -131,7 +120,6 @@ export const runBacktest = (
       continue;
     }
 
-    // 4. 计算信号 (略)
     if (i >= 20) {
       const s1 = getScore(i, momentumWindow, 'nav1');
       const s2 = getScore(i, momentumWindow, 'nav2');
@@ -152,7 +140,6 @@ export const runBacktest = (
         lastS1 = s1; lastS2 = s2; lastPass1 = pass1; lastPass2 = pass2; lastRec = target;
       }
 
-      // 5. 执行调仓
       if (target !== currentHolding) {
         const daysHeld = i - lastTradeIdx;
         if (currentHolding === 'CASH' || daysHeld >= minHoldDays) {
@@ -174,7 +161,6 @@ export const runBacktest = (
     }
   }
 
-  // 6. 统计指标修正
   let maxEquity = 0, maxDD = 0, maxDDDuration = 0;
   let peakDate = data[0].date;
 
@@ -185,8 +171,6 @@ export const runBacktest = (
     }
     const dd = (maxEquity - p.equity) / (maxEquity || 1);
     if (dd > maxDD) maxDD = dd;
-    
-    // 回撤持续时间计算修正：使用日历天数
     if (p.equity < maxEquity) {
       const duration = Math.floor((new Date(p.date).getTime() - new Date(peakDate).getTime()) / (1000 * 3600 * 24));
       if (duration > maxDDDuration) maxDDDuration = duration;
@@ -196,6 +180,8 @@ export const runBacktest = (
   const totalReturn = (currentCapital - totalInvested) / totalInvested;
   const annualizedReturn = Math.pow(1 + totalReturn, 1 / Math.max(0.1, data.length / 252)) - 1;
 
+  const lastDay = data[data.length - 1];
+
   return {
     dailyEquity, trades, metrics: { 
       initialCapital, totalInvested, finalCapital: currentCapital, totalReturn, 
@@ -204,7 +190,13 @@ export const runBacktest = (
     },
     codes: { code1, code2, codeBench: '005918' },
     lastSignal: {
-      date: data[data.length - 1].date, score1: lastS1, score2: lastS2, passMA1: lastPass1, passMA2: lastPass2, recommendation: lastRec
+      date: lastDay.date, 
+      score1: lastS1, score2: lastS2, passMA1: lastPass1, passMA2: lastPass2, recommendation: lastRec,
+      meta: {
+        lastDate1: lastDay.date, // 此处简化，实际逻辑在 dataService 提取更准，这里用于标记交集最后日期
+        lastDate2: lastDay.date,
+        isSynced: true
+      }
     }
   };
 };
