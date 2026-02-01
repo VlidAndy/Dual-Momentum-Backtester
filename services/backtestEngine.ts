@@ -6,11 +6,11 @@ export const runBacktest = (
   code1: string, 
   code2: string, 
   momentumWindow: number = 20,
-  slippageRate: number = 0.0,
+  slippageRate: number = 0.0005, // 默认万5滑点
   useAveraging: boolean = false,
   useMAFilter: boolean = false,
-  initialCapital: number = 2000,
-  minHoldDays: number = 7,
+  initialCapital: number = 10000,
+  minHoldDays: number = 0, // 默认 0，即信号触发立刻动
   injections: CapitalInjection[] = []
 ): BacktestResult => {
   const CASH_ANNUAL_RATE = 0.015; 
@@ -43,7 +43,6 @@ export const runBacktest = (
     const r1 = getMom(currentIdx, Math.max(2, Math.floor(baseN * 0.5)));
     const r2 = getMom(currentIdx, baseN);
     const r3 = getMom(currentIdx, Math.floor(baseN * 1.5));
-    if (r1 === -999 || r2 === -999 || r3 === -999) return -999;
     return (r1 + r2 + r3) / 3;
   };
 
@@ -66,19 +65,17 @@ export const runBacktest = (
         currentCapital += inj.amount;
       } else {
         const price = currentHolding === code1 ? today.nav1 : today.nav2;
-        const cost = inj.amount * slippageRate;
-        const netAmount = inj.amount - cost;
-        shares += netAmount / price;
-        totalCosts += cost;
+        // C 类基金买入费率为 0
+        shares += inj.amount / price;
         trades.push({
           date: today.date,
           asset: currentHolding,
           type: 'BUY',
           price,
-          amount: netAmount / price,
+          amount: inj.amount / price,
           totalAmount: inj.amount,
-          cost,
-          reason: '中途追加投入资金'
+          cost: 0,
+          reason: '追加投入 (C类免申购费)'
         });
       }
       bench1Shares += inj.amount / today.nav1;
@@ -108,14 +105,10 @@ export const runBacktest = (
 
     if (pendingSwitchTo) {
       const buyPrice = pendingSwitchTo === code1 ? today.nav1 : today.nav2;
-      const totalAmount = currentCapital;
-      const cost = totalAmount * slippageRate;
-      totalCosts += cost;
-      currentCapital -= cost;
-      shares = currentCapital / buyPrice;
+      shares = currentCapital / buyPrice; // 买入无手续费
       currentHolding = pendingSwitchTo;
       lastTradeIdx = i;
-      trades.push({ date: today.date, asset: pendingSwitchTo, type: 'BUY', price: buyPrice, amount: shares, totalAmount, cost, reason: `轮动买入` });
+      trades.push({ date: today.date, asset: pendingSwitchTo, type: 'BUY', price: buyPrice, amount: shares, totalAmount: currentCapital, cost: 0, reason: `轮动买入` });
       pendingSwitchTo = null;
       continue;
     }
@@ -142,16 +135,27 @@ export const runBacktest = (
 
       if (target !== currentHolding) {
         const daysHeld = i - lastTradeIdx;
+        // 如果开启了保护，且持仓不满 minHoldDays，则暂不切换
         if (currentHolding === 'CASH' || daysHeld >= minHoldDays) {
           if (currentHolding !== 'CASH') {
             const sellPrice = currentHolding === code1 ? today.nav1 : today.nav2;
+            // 7天强制费率逻辑
             const isShortTerm = daysHeld < 7;
-            const feeRate = isShortTerm ? 0.015 : slippageRate;
+            const feeRate = isShortTerm ? 0.015 : slippageRate; 
             const sellAmount = shares * sellPrice;
             const cost = sellAmount * feeRate;
             totalCosts += cost;
             currentCapital = sellAmount - cost;
-            trades.push({ date: today.date, asset: currentHolding, type: 'SELL', price: sellPrice, amount: shares, totalAmount: sellAmount, cost, reason: isShortTerm ? `惩罚性费率1.5%(持仓${daysHeld}天)` : `轮动赎回` });
+            trades.push({ 
+              date: today.date, 
+              asset: currentHolding, 
+              type: 'SELL', 
+              price: sellPrice, 
+              amount: shares, 
+              totalAmount: sellAmount, 
+              cost, 
+              reason: isShortTerm ? `轮动强制赎回 (不满7天扣1.5%)` : `轮动赎回` 
+            });
             shares = 0;
             currentHolding = 'CASH';
           }
@@ -165,10 +169,7 @@ export const runBacktest = (
   let peakDate = data[0].date;
 
   dailyEquity.forEach((p) => {
-    if (p.equity > maxEquity) {
-      maxEquity = p.equity;
-      peakDate = p.date;
-    }
+    if (p.equity > maxEquity) { maxEquity = p.equity; peakDate = p.date; }
     const dd = (maxEquity - p.equity) / (maxEquity || 1);
     if (dd > maxDD) maxDD = dd;
     if (p.equity < maxEquity) {
@@ -180,23 +181,16 @@ export const runBacktest = (
   const totalReturn = (currentCapital - totalInvested) / totalInvested;
   const annualizedReturn = Math.pow(1 + totalReturn, 1 / Math.max(0.1, data.length / 252)) - 1;
 
-  const lastDay = data[data.length - 1];
-
   return {
     dailyEquity, trades, metrics: { 
       initialCapital, totalInvested, finalCapital: currentCapital, totalReturn, 
       maxDrawdown: maxDD, maxDrawdownDuration: maxDDDuration,
       tradeCount: trades.length, annualizedReturn, totalCosts 
     },
-    codes: { code1, code2, codeBench: '005918' },
+    codes: { code1, code2, codeBench: '000300' },
     lastSignal: {
-      date: lastDay.date, 
-      score1: lastS1, score2: lastS2, passMA1: lastPass1, passMA2: lastPass2, recommendation: lastRec,
-      meta: {
-        lastDate1: lastDay.date, // 此处简化，实际逻辑在 dataService 提取更准，这里用于标记交集最后日期
-        lastDate2: lastDay.date,
-        isSynced: true
-      }
+      date: data[data.length-1].date, 
+      score1: lastS1, score2: lastS2, passMA1: lastPass1, passMA2: lastPass2, recommendation: lastRec
     }
   };
 };
