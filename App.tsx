@@ -9,7 +9,6 @@ import RealWorldView from './components/RealWorldView';
 
 type ViewMode = 'BACKTEST' | 'REAL_WORLD';
 
-// 辅助函数：获取本地日期字符串 (YYYY-MM-DD)
 const getLocalDateString = (date: Date = new Date()) => {
   const offset = date.getTimezoneOffset();
   const adjustedDate = new Date(date.getTime() - (offset * 60 * 1000));
@@ -19,12 +18,11 @@ const getLocalDateString = (date: Date = new Date()) => {
 const App: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('BACKTEST');
   
-  // --- 共享基础配置 ---
+  // --- 更新为用户指定的默认标的 ---
   const [fundA, setFundA] = useState({code: '011861', name: '中证1000ETF联接C'});
   const [fundB, setFundB] = useState({code: '020603', name: '中证红利低波动100联接C'});
   
-  // --- 回测专属状态 ---
-  const [momentumN, setMomentumN] = useState<number>(30);
+  const [momentumN, setMomentumN] = useState<number>(20); // 动量默认20日
   const [useMAFilter, setUseMAFilter] = useState<boolean>(true);
   const [minHoldDays, setMinHoldDays] = useState<number>(7);
   const [isParamLocked, setIsParamLocked] = useState<boolean>(false);
@@ -32,14 +30,13 @@ const App: React.FC = () => {
   
   const [startDate, setStartDate] = useState(() => {
     const d = new Date(); 
-    d.setFullYear(d.getFullYear() - 1); 
+    d.setFullYear(d.getFullYear() - 2); // 默认回测2年
     return getLocalDateString(d);
   });
   
   const [endDate, setEndDate] = useState(() => getLocalDateString());
   const [injections, setInjections] = useState<CapitalInjection[]>([]);
 
-  // --- 数据持久化与交互 ---
   const { data: rawFundData, loading, refresh, showSuccess } = useFundData(fundA.code, fundB.code);
   const [realOps, setRealOps] = useState<RealOperation[]>(() => {
     const saved = localStorage.getItem('real_operations_v2');
@@ -47,14 +44,12 @@ const App: React.FC = () => {
   });
   React.useEffect(() => { localStorage.setItem('real_operations_v2', JSON.stringify(realOps)); }, [realOps]);
 
-  // 计算逻辑
   const portfolio = usePortfolio(realOps, fundA, fundB, rawFundData);
   const result = useMemo(() => {
     if (rawFundData.length < 2) return null;
-    // 修复：确保过滤条件包含边界，且不因为时区 Bug 错误截断
     const filtered = rawFundData.filter(d => d.date >= startDate && d.date <= endDate);
     if (filtered.length < 2) return null;
-    return runBacktest(filtered, fundA.code, fundB.code, momentumN, 0, false, useMAFilter, principal, minHoldDays, injections);
+    return runBacktest(filtered, fundA.code, fundB.code, momentumN, 0.0012, false, useMAFilter, principal, minHoldDays, injections);
   }, [rawFundData, fundA.code, fundB.code, momentumN, useMAFilter, startDate, endDate, principal, minHoldDays, injections]);
 
   const addInjection = (inj: {date: string, amount: number}) => {
@@ -75,8 +70,8 @@ const App: React.FC = () => {
           </button>
         </div>
         <div className="hidden md:flex items-center gap-3 pr-4">
-           {loading && <span className="text-[10px] font-black text-indigo-500 animate-pulse uppercase">同步中...</span>}
-           <span className="text-[10px] font-black text-slate-300 uppercase tracking-tighter">PRO_V15_TZ_FIX</span>
+           {loading && <span className="text-[10px] font-black text-indigo-500 animate-pulse uppercase">通过代理同步中...</span>}
+           <span className="text-[10px] font-black text-slate-300 uppercase tracking-tighter">A-SHARE_MOMENTUM_V2</span>
         </div>
       </nav>
 
@@ -103,10 +98,6 @@ const App: React.FC = () => {
           />
         )}
       </main>
-      
-      <footer className="mt-12 md:hidden text-center pb-8 border-t pt-6 border-slate-100">
-        <p className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">A-Share Dual Momentum Pro</p>
-      </footer>
     </div>
   );
 };
