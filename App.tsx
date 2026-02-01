@@ -18,11 +18,10 @@ const getLocalDateString = (date: Date = new Date()) => {
 const App: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('BACKTEST');
   
-  // --- 更新为用户指定的默认标的 ---
   const [fundA, setFundA] = useState({code: '011861', name: '中证1000ETF联接C'});
   const [fundB, setFundB] = useState({code: '020603', name: '中证红利低波动100联接C'});
   
-  const [momentumN, setMomentumN] = useState<number>(20); // 动量默认20日
+  const [momentumN, setMomentumN] = useState<number>(20);
   const [useMAFilter, setUseMAFilter] = useState<boolean>(true);
   const [minHoldDays, setMinHoldDays] = useState<number>(7);
   const [isParamLocked, setIsParamLocked] = useState<boolean>(false);
@@ -30,7 +29,7 @@ const App: React.FC = () => {
   
   const [startDate, setStartDate] = useState(() => {
     const d = new Date(); 
-    d.setFullYear(d.getFullYear() - 2); // 默认回测2年
+    d.setFullYear(d.getFullYear() - 2);
     return getLocalDateString(d);
   });
   
@@ -70,8 +69,16 @@ const App: React.FC = () => {
           </button>
         </div>
         <div className="hidden md:flex items-center gap-3 pr-4">
-           {loading && <span className="text-[10px] font-black text-indigo-500 animate-pulse uppercase">通过代理同步中...</span>}
-           <span className="text-[10px] font-black text-slate-300 uppercase tracking-tighter">A-SHARE_MOMENTUM_V2</span>
+           {loading ? (
+             <span className="text-[10px] font-black text-indigo-500 animate-pulse uppercase flex items-center gap-1">
+               <i className="fa-solid fa-bolt-lightning"></i> 脚本注入同步中...
+             </span>
+           ) : (
+             <span className="text-[10px] font-black text-emerald-500 uppercase flex items-center gap-1">
+               <i className="fa-solid fa-shield-check"></i> 引擎状态: 容器直连 (No CORS)
+             </span>
+           )}
+           <span className="text-[10px] font-black text-slate-300 uppercase tracking-tighter">V2.1_DIRECT_LINK</span>
         </div>
       </nav>
 
