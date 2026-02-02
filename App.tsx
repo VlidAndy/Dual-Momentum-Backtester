@@ -46,11 +46,9 @@ const App: React.FC = () => {
   const portfolio = usePortfolio(realOps, fundA, fundB, rawFundData);
   const result = useMemo(() => {
     if (rawFundData.length < 2) return null;
-    const filtered = rawFundData.filter(d => d.date >= startDate && d.date <= endDate);
-    if (filtered.length < 2) return null;
-    // 滑点设为 0
-    return runBacktest(filtered, fundA.code, fundB.code, momentumN, 0, false, useMAFilter, principal, minHoldDays, injections);
-  }, [rawFundData, fundA.code, fundB.code, momentumN, useMAFilter, startDate, endDate, principal, minHoldDays, injections]);
+    // 关键改动：传入全量 rawFundData，并在引擎内部根据 startDate 确定回测统计起点
+    return runBacktest(rawFundData, fundA.code, fundB.code, momentumN, 0, false, useMAFilter, principal, minHoldDays, injections, startDate);
+  }, [rawFundData, fundA.code, fundB.code, momentumN, useMAFilter, startDate, principal, minHoldDays, injections]);
 
   const addInjection = (inj: {date: string, amount: number}) => {
     if (inj.date && inj.amount > 0) {
@@ -72,14 +70,14 @@ const App: React.FC = () => {
         <div className="hidden md:flex items-center gap-3 pr-4">
            {loading ? (
              <span className="text-[10px] font-black text-indigo-500 animate-pulse uppercase flex items-center gap-1">
-               <i className="fa-solid fa-bolt-lightning"></i> 脚本注入同步中...
+               <i className="fa-solid fa-bolt-lightning"></i> 指标预热中...
              </span>
            ) : (
              <span className="text-[10px] font-black text-emerald-500 uppercase flex items-center gap-1">
-               <i className="fa-solid fa-shield-check"></i> 引擎状态: 容器直连 (No CORS)
+               <i className="fa-solid fa-shield-check"></i> 信号稳定性: 全局锚定
              </span>
            )}
-           <span className="text-[10px] font-black text-slate-300 uppercase tracking-tighter">V2.2_ZERO_FEES</span>
+           <span className="text-[10px] font-black text-slate-300 uppercase tracking-tighter">V2.3_WARMUP_FIX</span>
         </div>
       </nav>
 

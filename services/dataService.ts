@@ -8,39 +8,69 @@ export interface SearchResult {
 }
 
 /**
- * 使用动态脚本注入绕过 CORS
- * 天天基金的 pingzhongdata 接口返回的是 JS 变量赋值，非常适合这种方式
+ * 基础 JSONP 工具函数
+ * 用于绕过搜索接口的 CORS 限制
+ */
+const fetchJsonp = (url: string): Promise<any> => {
+  return new Promise((resolve, reject) => {
+    const callbackName = `jsonp_cb_${Math.round(Math.random() * 1000000)}`;
+    const script = document.createElement('script');
+    
+    // 构造带 callback 的 URL
+    const separator = url.includes('?') ? '&' : '?';
+    script.src = `${url}${separator}callback=${callbackName}`;
+    script.async = true;
+
+    (window as any)[callbackName] = (data: any) => {
+      delete (window as any)[callbackName];
+      document.head.removeChild(script);
+      resolve(data);
+    };
+
+    script.onerror = () => {
+      delete (window as any)[callbackName];
+      if (script.parentNode) document.head.removeChild(script);
+      reject(new Error("JSONP 请求失败"));
+    };
+
+    document.head.appendChild(script);
+    
+    setTimeout(() => {
+      if ((window as any)[callbackName]) {
+        delete (window as any)[callbackName];
+        if (script.parentNode) document.head.removeChild(script);
+        reject(new Error("请求超时"));
+      }
+    }, 8000);
+  });
+};
+
+/**
+ * 使用动态脚本注入获取基金历史净值 (针对 pingzhongdata 接口)
  */
 const injectScriptData = (code: string): Promise<any> => {
   return new Promise((resolve, reject) => {
     const scriptId = `fund_data_${code}_${Date.now()}`;
     const script = document.createElement('script');
     script.id = scriptId;
-    // 强制使用 https 协议
     script.src = `https://fund.eastmoney.com/pingzhongdata/${code}.js`;
     script.async = true;
 
     const cleanup = () => {
       const el = document.getElementById(scriptId);
       if (el) el.remove();
-      // 清理全局变量防止内存泄漏，但在读取后执行
     };
 
     script.onload = () => {
       try {
-        // 天天基金 JS 文件定义的关键变量
         const acWorth = (window as any).Data_ACWorthTrend;
         const netWorth = (window as any).Data_netWorthTrend;
-        const fundName = (window as any).fS_name;
-        
         const data = acWorth || netWorth;
         
         if (data && Array.isArray(data)) {
-          // 深度拷贝数据
-          const result = JSON.parse(JSON.stringify(data));
-          resolve(result);
+          resolve(JSON.parse(JSON.stringify(data)));
         } else {
-          reject(new Error(`未在脚本中找到有效数据变量 (Code: ${code})`));
+          reject(new Error(`未找到数据 (Code: ${code})`));
         }
       } catch (e) {
         reject(e);
@@ -51,30 +81,23 @@ const injectScriptData = (code: string): Promise<any> => {
 
     script.onerror = () => {
       cleanup();
-      reject(new Error(`脚本加载失败，可能是代码错误或请求被拦截 (Code: ${code})`));
+      reject(new Error(`加载失败 (Code: ${code})`));
     };
 
     document.head.appendChild(script);
-    
-    // 10秒超时控制
-    setTimeout(() => {
-      cleanup();
-      reject(new Error("请求超时"));
-    }, 10000);
+    setTimeout(() => { cleanup(); reject(new Error("请求超时")); }, 10000);
   });
 };
 
 /**
- * 搜索基金 (搜索接口仍然需要代理，因为返回的是纯 JSON)
+ * 搜索基金 - 采用 JSONP 模式，彻底摒弃 AllOrigins 代理
  */
 export const searchFunds = async (key: string): Promise<SearchResult[]> => {
   if (!key) return [];
   try {
+    // 天天基金搜索接口支持 callback 参数进行 JSONP 调用
     const targetUrl = `https://fundsuggest.eastmoney.com/FundSearch/api/FundSearchAPI.ashx?m=1&key=${encodeURIComponent(key)}`;
-    // 搜索接口仍然保留一个轻量级代理，或者在生产环境使用自己的 proxy
-    const response = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`);
-    const json = await response.json();
-    const data = JSON.parse(json.contents);
+    const data = await fetchJsonp(targetUrl);
     
     if (data && data.Datas && Array.isArray(data.Datas)) {
       return data.Datas.map((item: any) => ({
@@ -99,9 +122,6 @@ export const fetchHistoricalData = async (code1: string, code2: string): Promise
   const marketBenchCode = '000300'; 
   
   try {
-    console.log(`[DataService] Fetching via Direct Script Injection...`);
-    
-    // 并行注入脚本获取数据
     const [raw1, raw2, rawBench] = await Promise.all([
       injectScriptData(code1),
       injectScriptData(code2),
@@ -110,7 +130,6 @@ export const fetchHistoricalData = async (code1: string, code2: string): Promise
 
     const dataMap = new Map<string, { nav1?: number, nav2?: number, navBench?: number }>();
     
-    // 解析逻辑
     const processRaw = (raw: any[], key: 'nav1' | 'nav2' | 'navBench') => {
       raw.forEach((item: any) => {
         let ts, val;
@@ -143,7 +162,7 @@ export const fetchHistoricalData = async (code1: string, code2: string): Promise
     return intersection;
 
   } catch (error: any) {
-    console.error(`[DataService] Direct fetch failed:`, error);
-    throw new Error(`直连同步失败: ${error.message}。请检查代码是否正确或尝试刷新。`);
+    console.error(`[DataService] Fetch failed:`, error);
+    throw new Error(`同步失败: ${error.message}`);
   }
 };

@@ -92,7 +92,8 @@ const RealWorldView: React.FC<Props> = (props) => {
 
   return (
     <div className="animate-in fade-in duration-500 space-y-6 md:space-y-8">
-      <SignalBanner result={props.result} fundA={props.fundA} fundB={props.fundB} />
+      {/* 关键改动：传入 portfolio 数据 */}
+      <SignalBanner result={props.result} fundA={props.fundA} fundB={props.fundB} portfolio={props.portfolio} />
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
