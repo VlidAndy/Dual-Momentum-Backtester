@@ -6,11 +6,11 @@ export const runBacktest = (
   code1: string, 
   code2: string, 
   momentumWindow: number = 20,
-  slippageRate: number = 0.0005, // 默认万5滑点
+  slippageRate: number = 0, // 默认改为 0 滑点
   useAveraging: boolean = false,
   useMAFilter: boolean = false,
   initialCapital: number = 10000,
-  minHoldDays: number = 0, // 默认 0，即信号触发立刻动
+  minHoldDays: number = 7, // 默认建议 7 天以规避 C 类惩罚费
   injections: CapitalInjection[] = []
 ): BacktestResult => {
   const CASH_ANNUAL_RATE = 0.015; 
@@ -65,7 +65,6 @@ export const runBacktest = (
         currentCapital += inj.amount;
       } else {
         const price = currentHolding === code1 ? today.nav1 : today.nav2;
-        // C 类基金买入费率为 0
         shares += inj.amount / price;
         trades.push({
           date: today.date,
@@ -105,7 +104,7 @@ export const runBacktest = (
 
     if (pendingSwitchTo) {
       const buyPrice = pendingSwitchTo === code1 ? today.nav1 : today.nav2;
-      shares = currentCapital / buyPrice; // 买入无手续费
+      shares = currentCapital / buyPrice; 
       currentHolding = pendingSwitchTo;
       lastTradeIdx = i;
       trades.push({ date: today.date, asset: pendingSwitchTo, type: 'BUY', price: buyPrice, amount: shares, totalAmount: currentCapital, cost: 0, reason: `轮动买入` });
@@ -134,12 +133,12 @@ export const runBacktest = (
       }
 
       if (target !== currentHolding) {
-        const daysHeld = i - lastTradeIdx;
-        // 如果开启了保护，且持仓不满 minHoldDays，则暂不切换
+        const daysHeld = lastTradeIdx === -1 ? 999 : (i - lastTradeIdx);
+        // 如果开启了保护（minHoldDays > 0），且持仓不满 minHoldDays，则暂不切换
         if (currentHolding === 'CASH' || daysHeld >= minHoldDays) {
           if (currentHolding !== 'CASH') {
             const sellPrice = currentHolding === code1 ? today.nav1 : today.nav2;
-            // 7天强制费率逻辑
+            // C 类 7 天强制费率逻辑
             const isShortTerm = daysHeld < 7;
             const feeRate = isShortTerm ? 0.015 : slippageRate; 
             const sellAmount = shares * sellPrice;
@@ -154,7 +153,7 @@ export const runBacktest = (
               amount: shares, 
               totalAmount: sellAmount, 
               cost, 
-              reason: isShortTerm ? `轮动强制赎回 (不满7天扣1.5%)` : `轮动赎回` 
+              reason: isShortTerm ? `强制赎回 (持仓${daysHeld}天,不满7天扣1.5%)` : `轮动赎回` 
             });
             shares = 0;
             currentHolding = 'CASH';
@@ -165,18 +164,26 @@ export const runBacktest = (
     }
   }
 
-  let maxEquity = 0, maxDD = 0, maxDDDuration = 0;
-  let peakDate = data[0].date;
+  // 计算最大回撤及持续时间
+  let maxEquity = 0;
+  let maxDD = 0;
+  let maxDDDuration = 0;
+  let currentDDBeginIdx = -1;
 
-  dailyEquity.forEach((p) => {
-    if (p.equity > maxEquity) { maxEquity = p.equity; peakDate = p.date; }
-    const dd = (maxEquity - p.equity) / (maxEquity || 1);
-    if (dd > maxDD) maxDD = dd;
-    if (p.equity < maxEquity) {
-      const duration = Math.floor((new Date(p.date).getTime() - new Date(peakDate).getTime()) / (1000 * 3600 * 24));
-      if (duration > maxDDDuration) maxDDDuration = duration;
+  for (let i = 0; i < dailyEquity.length; i++) {
+    const e = dailyEquity[i].equity;
+    if (e > maxEquity) {
+      maxEquity = e;
+      currentDDBeginIdx = -1; // 创新高，重置回撤计数
+    } else {
+      if (currentDDBeginIdx === -1) currentDDBeginIdx = i - 1;
+      const currentDuration = i - currentDDBeginIdx;
+      if (currentDuration > maxDDDuration) maxDDDuration = currentDuration;
+      
+      const dd = (maxEquity - e) / maxEquity;
+      if (dd > maxDD) maxDD = dd;
     }
-  });
+  }
 
   const totalReturn = (currentCapital - totalInvested) / totalInvested;
   const annualizedReturn = Math.pow(1 + totalReturn, 1 / Math.max(0.1, data.length / 252)) - 1;
@@ -184,7 +191,7 @@ export const runBacktest = (
   return {
     dailyEquity, trades, metrics: { 
       initialCapital, totalInvested, finalCapital: currentCapital, totalReturn, 
-      maxDrawdown: maxDD, maxDrawdownDuration: maxDDDuration,
+      maxDrawdown: maxDD, maxDrawdownDuration: maxDDDuration, // 这里的持续时间以天（交易日）为单位
       tradeCount: trades.length, annualizedReturn, totalCosts 
     },
     codes: { code1, code2, codeBench: '000300' },

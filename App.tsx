@@ -48,7 +48,8 @@ const App: React.FC = () => {
     if (rawFundData.length < 2) return null;
     const filtered = rawFundData.filter(d => d.date >= startDate && d.date <= endDate);
     if (filtered.length < 2) return null;
-    return runBacktest(filtered, fundA.code, fundB.code, momentumN, 0.0012, false, useMAFilter, principal, minHoldDays, injections);
+    // 滑点设为 0
+    return runBacktest(filtered, fundA.code, fundB.code, momentumN, 0, false, useMAFilter, principal, minHoldDays, injections);
   }, [rawFundData, fundA.code, fundB.code, momentumN, useMAFilter, startDate, endDate, principal, minHoldDays, injections]);
 
   const addInjection = (inj: {date: string, amount: number}) => {
@@ -78,7 +79,7 @@ const App: React.FC = () => {
                <i className="fa-solid fa-shield-check"></i> 引擎状态: 容器直连 (No CORS)
              </span>
            )}
-           <span className="text-[10px] font-black text-slate-300 uppercase tracking-tighter">V2.1_DIRECT_LINK</span>
+           <span className="text-[10px] font-black text-slate-300 uppercase tracking-tighter">V2.2_ZERO_FEES</span>
         </div>
       </nav>
 
